@@ -11,6 +11,7 @@ import { Admin } from './views/Admin';
 import type { Profile, Channel } from './types';
 import { MockDatabase } from './services/db';
 import { Auth } from './views/Auth';
+import { supabase, toLocalDeptId } from './services/supabase';
 
 function App() {
   const [currentUser, setCurrentUser] = useState<Profile | null>(null);
@@ -33,6 +34,105 @@ function App() {
       window.removeEventListener('slock_user_changed', handleUserChanged);
     };
   }, []);
+
+  // Synchronisation en temps réel avec Supabase au démarrage (WOW factor)
+  useEffect(() => {
+    const syncDatabaseFromSupabase = async () => {
+      try {
+        if (supabase) {
+          const client = supabase;
+          console.log("Slock: Supabase cloud détecté. Lancement de la synchronisation en tâche de fond...");
+          
+          // 1. Récupérer et synchroniser les Profils hospitaliers
+          const { data: remoteProfiles, error: profError } = await client
+            .from('profiles')
+            .select('*');
+
+          if (!profError && remoteProfiles) {
+            const mappedProfiles: Profile[] = remoteProfiles.map(p => ({
+              id: p.id,
+              first_name: p.first_name,
+              last_name: p.last_name,
+              email: p.email,
+              role: p.role,
+              avatar_url: p.avatar_url || `https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=100`,
+              phone: p.phone || "+33 6 00 00 00 00",
+              status: (p.status === 'active' ? 'available' : p.status) || 'available',
+              status_message: p.status_message || 'Disponible',
+              department_id: toLocalDeptId(p.department_id) || 'dep_cardio',
+              created_at: p.created_at || new Date().toISOString()
+            }));
+            
+            MockDatabase.save('profiles', mappedProfiles);
+            console.log(`Slock: ${mappedProfiles.length} profils cliniques synchronisés depuis Supabase.`);
+          }
+
+          // 2. Récupérer et synchroniser les Groupes
+          const { data: remoteGroups, error: grpError } = await client
+            .from('groups')
+            .select('*');
+
+          if (!grpError && remoteGroups) {
+            const groupsWithMembers = await Promise.all(remoteGroups.map(async (g) => {
+              const { data: members, error: memErr } = await client
+                .from('group_members')
+                .select('profile_id')
+                .eq('group_id', g.id);
+              
+              const memberIds = !memErr && members ? members.map(m => m.profile_id) : [];
+              
+              return {
+                id: g.id,
+                name: g.name,
+                description: g.description || '',
+                type: g.type,
+                owner_id: g.owner_id,
+                created_at: g.created_at || new Date().toISOString(),
+                member_ids: memberIds
+              };
+            }));
+
+            MockDatabase.save('groups', groupsWithMembers);
+            console.log(`Slock: ${groupsWithMembers.length} groupes synchronisés depuis Supabase.`);
+          }
+
+          // 3. Récupérer et synchroniser les Canaux
+          const { data: remoteChannels, error: chanError } = await client
+            .from('channels')
+            .select('*');
+
+          if (!chanError && remoteChannels) {
+            const channelsWithMembers = await Promise.all(remoteChannels.map(async (c) => {
+              const { data: members, error: memErr } = await client
+                .from('channel_members')
+                .select('profile_id')
+                .eq('channel_id', c.id);
+              
+              const memberIds = !memErr && members ? members.map(m => m.profile_id) : [];
+              
+              return {
+                id: c.id,
+                group_id: c.group_id || undefined,
+                name: c.name,
+                description: c.description || '',
+                is_private: c.is_private || false,
+                owner_id: c.owner_id,
+                created_at: c.created_at || new Date().toISOString(),
+                member_ids: memberIds
+              };
+            }));
+
+            MockDatabase.save('channels', channelsWithMembers);
+            console.log(`Slock: ${channelsWithMembers.length} canaux synchronisés depuis Supabase.`);
+          }
+        }
+      } catch (err) {
+        console.warn("Slock: Erreur de synchronisation Supabase au démarrage (mode local actif) :", err);
+      }
+    };
+
+    syncDatabaseFromSupabase();
+  }, [currentUser]);
 
   const handleUserChange = (user: Profile | null) => {
     MockDatabase.setCurrentUser(user);

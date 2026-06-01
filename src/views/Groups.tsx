@@ -33,10 +33,17 @@ export const Groups: React.FC<GroupsProps> = ({
     loadGroupsData();
 
     const handleGroupsUpdate = () => setGroups(MockDatabase.getGroups());
+    const handleProfilesUpdate = () => setProfiles(MockDatabase.getProfiles());
+    const handleChannelsUpdate = () => setChannels(MockDatabase.getChannels());
+
     window.addEventListener('slock_update_groups', handleGroupsUpdate);
+    window.addEventListener('slock_update_profiles', handleProfilesUpdate);
+    window.addEventListener('slock_update_channels', handleChannelsUpdate);
 
     return () => {
       window.removeEventListener('slock_update_groups', handleGroupsUpdate);
+      window.removeEventListener('slock_update_profiles', handleProfilesUpdate);
+      window.removeEventListener('slock_update_channels', handleChannelsUpdate);
     };
   }, []);
 
