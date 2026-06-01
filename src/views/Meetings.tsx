@@ -20,6 +20,15 @@ export const Meetings: React.FC<MeetingsProps> = ({
   const [decisions, setDecisions] = useState<MeetingDecision[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [showPlanModal, setShowPlanModal] = useState(false);
+  const [showDirectPVModal, setShowDirectPVModal] = useState(false);
+
+  // Formulaire PV Direct
+  const [pvTitle, setPvTitle] = useState('');
+  const [pvDate, setPvDate] = useState('');
+  const [pvLocation, setPvLocation] = useState('');
+  const [pvAgenda, setPvAgenda] = useState('');
+  const [pvNotes, setPvNotes] = useState('');
+  const [pvParticipants, setPvParticipants] = useState<string[]>([]);
 
   // Éditeur de PV locaux
   const [isEditing, setIsEditing] = useState(false);
@@ -192,6 +201,53 @@ export const Meetings: React.FC<MeetingsProps> = ({
     setMeetParticipants([]);
   };
 
+  const handleCreateDirectPVSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pvTitle.trim() || !pvDate) return;
+
+    const listAgenda = pvAgenda.split('\n').filter(a => a.trim().length > 0);
+
+    const newMeeting: Meeting = {
+      id: `meet_${Date.now()}`,
+      title: pvTitle,
+      date: pvDate,
+      time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      location: pvLocation || 'Salle Staff / Visioconférence',
+      organizer_id: currentUser.id,
+      participant_ids: [currentUser.id, ...pvParticipants],
+      agenda: listAgenda.length > 0 ? listAgenda : ['Sujets abordés dans la séance'],
+      notes: pvNotes || 'Procès-verbal rédigé en séance.',
+      is_minutes_validated: false,
+      created_at: new Date().toISOString(),
+      project_id: 'proj_dpi' // Lié par défaut
+    };
+
+    const updated = [...meetings, newMeeting];
+    MockDatabase.saveMeetings(updated);
+    setMeetings(updated);
+    setSelectedMeetingId(newMeeting.id);
+    setShowDirectPVModal(false);
+
+    // Reset Form
+    setPvTitle('');
+    setPvDate('');
+    setPvLocation('');
+    setPvAgenda('');
+    setPvNotes('');
+    setPvParticipants([]);
+    
+    alert("PV direct créé avec succès ! Vous pouvez maintenant y ajouter des décisions structurées ou le signer numériquement.");
+  };
+
+  const togglePvParticipant = (pId: string) => {
+    const index = pvParticipants.indexOf(pId);
+    if (index > -1) {
+      setPvParticipants(pvParticipants.filter(id => id !== pId));
+    } else {
+      setPvParticipants([...pvParticipants, pId]);
+    }
+  };
+
   const toggleParticipant = (pId: string) => {
     const index = meetParticipants.indexOf(pId);
     if (index > -1) {
@@ -210,9 +266,14 @@ export const Meetings: React.FC<MeetingsProps> = ({
           <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--color-text-main)' }}>Comptes-Rendus & Procès-Verbaux (PV)</h2>
           <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '2px' }}>Rédigez les décisions hospitalières, assignez les actions opérationnelles et exportez en PDF certifié.</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowPlanModal(true)}>
-          <Plus size={14} /> Planifier une réunion
-        </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button className="btn btn-secondary" onClick={() => setShowDirectPVModal(true)}>
+            <FileText size={14} /> Rédiger un PV direct
+          </button>
+          <button className="btn btn-primary" onClick={() => setShowPlanModal(true)}>
+            <Plus size={14} /> Planifier une réunion
+          </button>
+        </div>
       </div>
 
       {/* Grid: Left Meetings list, Right PV Editor/Preview */}
@@ -587,6 +648,99 @@ export const Meetings: React.FC<MeetingsProps> = ({
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowPlanModal(false)}>Annuler</button>
                 <button type="submit" className="btn btn-primary">Planifier la réunion</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Rédiger PV Direct Modal */}
+      {showDirectPVModal && (
+        <div className="modal-overlay" onClick={() => setShowDirectPVModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+            <div className="modal-header">
+              <span className="modal-title">Rédiger un Procès-Verbal (PV) à la volée</span>
+              <button onClick={() => setShowDirectPVModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)' }}>
+                <X size={18} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleCreateDirectPVSubmit}>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label>Sujet / Objet de la réunion *</label>
+                  <input 
+                    type="text" 
+                    placeholder="ex: Décisions urgentes - Cellule de crise sanitaire" 
+                    value={pvTitle}
+                    onChange={(e) => setPvTitle(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div className="form-group">
+                    <label>Date de Séance *</label>
+                    <input 
+                      type="date" 
+                      value={pvDate}
+                      onChange={(e) => setPvDate(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Lieu / Moyen de rencontre</label>
+                    <input 
+                      type="text" 
+                      placeholder="ex: Bureau Direction ou Visioconférence" 
+                      value={pvLocation}
+                      onChange={(e) => setPvLocation(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Participants présents (Sélectionnez)</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', maxHeight: '110px', overflowY: 'auto', border: '1px solid var(--color-border)', padding: '10px', borderRadius: '8px', backgroundColor: '#FFFFFF' }}>
+                    {profiles.map(p => (
+                      <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={pvParticipants.includes(p.id)}
+                          onChange={() => togglePvParticipant(p.id)}
+                        />
+                        <span>{p.first_name} {p.last_name} ({p.role})</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Ordre du Jour (Un sujet par ligne)</label>
+                  <textarea 
+                    rows={2} 
+                    placeholder="ex: Bilan clinique&#10;Réorganisation des plannings" 
+                    value={pvAgenda}
+                    onChange={(e) => setPvAgenda(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Notes de séance / Synthèse du PV *</label>
+                  <textarea 
+                    rows={4} 
+                    placeholder="Saisissez ici le contenu principal de votre procès-verbal, résumant les échanges et points clés..." 
+                    value={pvNotes}
+                    onChange={(e) => setPvNotes(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+              
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowDirectPVModal(false)}>Annuler</button>
+                <button type="submit" className="btn btn-primary">Créer et enregistrer le PV</button>
               </div>
             </form>
           </div>
