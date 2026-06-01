@@ -35,6 +35,9 @@ export const Meetings: React.FC<MeetingsProps> = ({
   const [notes, setNotes] = useState('');
   const [localDecisions, setLocalDecisions] = useState<string[]>([]);
   const [localTasks, setLocalTasks] = useState<{title: string, assignedTo: string, priority: PriorityLevel, dueDate?: string}[]>([]);
+  const [localHighlights, setLocalHighlights] = useState<string[]>([]);
+  const [localWarnings, setLocalWarnings] = useState<string[]>([]);
+  const [nextMeeting, setNextMeeting] = useState('');
 
   // Formulaire Planification Réunion
   const [meetTitle, setMeetTitle] = useState('');
@@ -80,6 +83,9 @@ export const Meetings: React.FC<MeetingsProps> = ({
   useEffect(() => {
     if (selectedMeeting) {
       setNotes(selectedMeeting.notes || '');
+      setLocalHighlights(selectedMeeting.highlights && selectedMeeting.highlights.length > 0 ? selectedMeeting.highlights : ['']);
+      setLocalWarnings(selectedMeeting.warnings && selectedMeeting.warnings.length > 0 ? selectedMeeting.warnings : ['']);
+      setNextMeeting(selectedMeeting.next_meeting || '');
       
       const allDec = MockDatabase.getDecisions();
       const decs = allDec.filter(d => d.meeting_id === selectedMeeting.id).map(d => d.content);
@@ -88,7 +94,7 @@ export const Meetings: React.FC<MeetingsProps> = ({
       setLocalTasks([]);
       setIsEditing(false);
     }
-  }, [selectedMeetingId]);
+  }, [selectedMeetingId, selectedMeeting]);
 
   const getOrganizerName = (id: string) => {
     const user = profiles.find(p => p.id === id);
@@ -122,6 +128,38 @@ export const Meetings: React.FC<MeetingsProps> = ({
     setLocalDecisions(next);
   };
 
+  const handleAddHighlightField = () => {
+    setLocalHighlights([...localHighlights, '']);
+  };
+
+  const handleRemoveHighlightField = (index: number) => {
+    const next = [...localHighlights];
+    next.splice(index, 1);
+    setLocalHighlights(next.length > 0 ? next : ['']);
+  };
+
+  const handleHighlightChange = (index: number, val: string) => {
+    const next = [...localHighlights];
+    next[index] = val;
+    setLocalHighlights(next);
+  };
+
+  const handleAddWarningField = () => {
+    setLocalWarnings([...localWarnings, '']);
+  };
+
+  const handleRemoveWarningField = (index: number) => {
+    const next = [...localWarnings];
+    next.splice(index, 1);
+    setLocalWarnings(next.length > 0 ? next : ['']);
+  };
+
+  const handleWarningChange = (index: number, val: string) => {
+    const next = [...localWarnings];
+    next[index] = val;
+    setLocalWarnings(next);
+  };
+
   const handleAddTaskField = () => {
     setLocalTasks([...localTasks, { title: '', assignedTo: profiles[0]?.id || '', priority: 'normal' }]);
   };
@@ -141,7 +179,15 @@ export const Meetings: React.FC<MeetingsProps> = ({
   const handleSavePV = () => {
     if (!selectedMeeting) return;
     
-    MockDatabase.saveMinutes(selectedMeeting.id, notes, localDecisions, localTasks);
+    MockDatabase.saveMinutes(
+      selectedMeeting.id, 
+      notes, 
+      localDecisions, 
+      localTasks,
+      localHighlights,
+      localWarnings,
+      nextMeeting
+    );
     
     // Notifications system update
     setIsEditing(false);
@@ -217,6 +263,9 @@ export const Meetings: React.FC<MeetingsProps> = ({
       participant_ids: [currentUser.id, ...pvParticipants],
       agenda: listAgenda.length > 0 ? listAgenda : ['Sujets abordés dans la séance'],
       notes: pvNotes || 'Procès-verbal rédigé en séance.',
+      highlights: [],
+      warnings: [],
+      next_meeting: '',
       is_minutes_validated: false,
       created_at: new Date().toISOString(),
       project_id: 'proj_dpi' // Lié par défaut
@@ -369,11 +418,71 @@ export const Meetings: React.FC<MeetingsProps> = ({
                   />
                 </div>
 
+                {/* HIGHLIGHTS (POINTS IMPORTANTS) */}
+                <div style={{ borderTop: '1px solid rgba(0,0,0,0.05)', paddingTop: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <h4 style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      🌟 Points Importants (Faits Saillants)
+                    </h4>
+                    <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '11px', backgroundColor: 'var(--color-primary-light)', color: 'var(--color-primary)', border: 'none' }} onClick={handleAddHighlightField}>
+                      + Ajouter un fait saillant
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {localHighlights.map((hl, i) => (
+                      <div key={i} style={{ display: 'flex', gap: '8px' }}>
+                        <input 
+                          type="text"
+                          value={hl}
+                          onChange={(e) => handleHighlightChange(i, e.target.value)}
+                          placeholder={`Fait saillant #${i+1} (Décisions stratégiques, jalons atteints...)`}
+                          style={{ flex: 1, padding: '8px 12px', border: '1px solid var(--color-border)', borderRadius: '8px', fontSize: '12.5px', backgroundColor: '#F5FAFF' }}
+                        />
+                        <button type="button" onClick={() => handleRemoveHighlightField(i)} style={{ background: 'none', border: 'none', color: 'var(--color-danger)', cursor: 'pointer' }}>
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* WARNINGS (POINTS DE VIGILANCE) */}
+                <div style={{ borderTop: '1px solid rgba(0,0,0,0.05)', paddingTop: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <h4 style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--color-warning)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      ⚠️ Points de Vigilance (Risques & Alertes)
+                    </h4>
+                    <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '11px', backgroundColor: 'var(--color-warning-bg)', color: 'var(--color-warning)', border: 'none' }} onClick={handleAddWarningField}>
+                      + Ajouter un point de vigilance
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {localWarnings.map((wr, i) => (
+                      <div key={i} style={{ display: 'flex', gap: '8px' }}>
+                        <input 
+                          type="text"
+                          value={wr}
+                          onChange={(e) => handleWarningChange(i, e.target.value)}
+                          placeholder={`Point de vigilance #${i+1} (Retards potentiels, blocages techniques...)`}
+                          style={{ flex: 1, padding: '8px 12px', border: '1px solid var(--color-border)', borderRadius: '8px', fontSize: '12.5px', backgroundColor: '#FFFDF5' }}
+                        />
+                        <button type="button" onClick={() => handleRemoveWarningField(i)} style={{ background: 'none', border: 'none', color: 'var(--color-danger)', cursor: 'pointer' }}>
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
                 {/* DECISIONS LIST */}
                 <div style={{ borderTop: '1px solid rgba(0,0,0,0.05)', paddingTop: '16px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                    <h4 style={{ fontSize: '12.5px', fontWeight: 700 }}>1. Décisions prises</h4>
-                    <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '11px' }} onClick={handleAddDecisionField}>
+                    <h4 style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--color-info)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      📝 Décisions prises
+                    </h4>
+                    <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '11px', backgroundColor: 'var(--color-info-bg)', color: 'var(--color-info)', border: 'none' }} onClick={handleAddDecisionField}>
                       + Ajouter décision
                     </button>
                   </div>
@@ -399,7 +508,7 @@ export const Meetings: React.FC<MeetingsProps> = ({
                 {/* GENERATE ACTIONS LIST */}
                 <div style={{ borderTop: '1px solid rgba(0,0,0,0.05)', paddingTop: '16px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                    <h4 style={{ fontSize: '12.5px', fontWeight: 700 }}>2. Actions opérationnelles décidées (Création de tâches)</h4>
+                    <h4 style={{ fontSize: '12.5px', fontWeight: 700 }}>🛠️ Actions opérationnelles décidées (Création de tâches)</h4>
                     <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '11px' }} onClick={handleAddTaskField}>
                       + Ajouter une action
                     </button>
@@ -458,6 +567,20 @@ export const Meetings: React.FC<MeetingsProps> = ({
                   ))}
                 </div>
 
+                {/* NEXT MEETING PLANNER */}
+                <div style={{ borderTop: '1px solid rgba(0,0,0,0.05)', paddingTop: '16px' }}>
+                  <h4 style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--color-text-main)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    📅 Prochaine réunion
+                  </h4>
+                  <input 
+                    type="text"
+                    value={nextMeeting}
+                    onChange={(e) => setNextMeeting(e.target.value)}
+                    placeholder="Date, heure et ordre du jour prévisionnel (ex: Lundi 15 Juin à 14h - Suivi de chantier DPI)"
+                    style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--color-border)', borderRadius: '10px', fontSize: '12.5px' }}
+                  />
+                </div>
+
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', borderTop: '1px solid rgba(0,0,0,0.05)', paddingTop: '16px' }}>
                   <button className="btn btn-secondary" onClick={() => setIsEditing(false)}>Annuler</button>
                   <button className="btn btn-primary" onClick={handleSavePV}>Enregistrer le PV & Générer les actions</button>
@@ -478,6 +601,56 @@ export const Meetings: React.FC<MeetingsProps> = ({
                     {selectedMeeting.agenda.map((a, i) => <li key={i}>{a}</li>)}
                   </ul>
                 </div>
+
+                {/* POINTS IMPORTANTS & DE VIGILANCE (Premium Apple Style) */}
+                {((selectedMeeting.highlights && selectedMeeting.highlights.length > 0 && selectedMeeting.highlights.some(h => h.trim())) ||
+                  (selectedMeeting.warnings && selectedMeeting.warnings.length > 0 && selectedMeeting.warnings.some(w => w.trim()))) && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '24px' }}>
+                    {/* Points Importants (Bleu Pastel Apple) */}
+                    {selectedMeeting.highlights && selectedMeeting.highlights.some(h => h.trim()) && (
+                      <div style={{
+                        padding: '16px',
+                        borderRadius: '12px',
+                        backgroundColor: 'rgba(0, 122, 255, 0.06)',
+                        borderLeft: '4px solid var(--color-primary)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '10px'
+                      }}>
+                        <h4 style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: '6px', margin: 0, letterSpacing: '0.5px' }}>
+                          🌟 POINTS IMPORTANTS / FAITS SAILLANTS
+                        </h4>
+                        <ul style={{ paddingLeft: '16px', margin: 0, fontSize: '12.5px', color: '#1D1D1F', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          {selectedMeeting.highlights.filter(h => h.trim()).map((h, i) => (
+                            <li key={i} style={{ lineHeight: '1.4' }}>{h}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Points de Vigilance (Orange Pastel Apple) */}
+                    {selectedMeeting.warnings && selectedMeeting.warnings.some(w => w.trim()) && (
+                      <div style={{
+                        padding: '16px',
+                        borderRadius: '12px',
+                        backgroundColor: 'rgba(255, 149, 0, 0.06)',
+                        borderLeft: '4px solid var(--color-warning)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '10px'
+                      }}>
+                        <h4 style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-warning)', display: 'flex', alignItems: 'center', gap: '6px', margin: 0, letterSpacing: '0.5px' }}>
+                          ⚠️ POINTS DE VIGILANCE / RISQUES
+                        </h4>
+                        <ul style={{ paddingLeft: '16px', margin: 0, fontSize: '12.5px', color: '#1D1D1F', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          {selectedMeeting.warnings.filter(w => w.trim()).map((w, i) => (
+                            <li key={i} style={{ lineHeight: '1.4' }}>{w}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {selectedMeeting.notes ? (
                   <div className="pv-section" style={{ marginTop: '24px' }}>
@@ -530,6 +703,42 @@ export const Meetings: React.FC<MeetingsProps> = ({
                         })}
                       </tbody>
                     </table>
+                  </div>
+                )}
+
+                {/* Next Meeting (Minimalist & elegant bottom box) */}
+                {selectedMeeting.next_meeting && (
+                  <div style={{
+                    marginTop: '28px',
+                    padding: '14px 18px',
+                    borderRadius: '12px',
+                    backgroundColor: 'var(--color-bg-base)',
+                    border: '1px solid var(--color-border)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px'
+                  }}>
+                    <div style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '8px',
+                      backgroundColor: 'var(--color-primary-light)',
+                      color: 'var(--color-primary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0
+                    }}>
+                      <Calendar size={18} />
+                    </div>
+                    <div>
+                      <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block' }}>
+                        Prochaine réunion programmée
+                      </span>
+                      <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-main)', marginTop: '2px', display: 'block' }}>
+                        {selectedMeeting.next_meeting}
+                      </span>
+                    </div>
                   </div>
                 )}
 

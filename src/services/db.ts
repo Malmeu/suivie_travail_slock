@@ -525,17 +525,31 @@ export class MockDatabase {
     }
   }
 
-  static saveMinutes(meetingId: string, notes: string, decisions: string[], newTasks: {title: string, assignedTo: string, priority: PriorityLevel, dueDate?: string}[]): void {
+  static saveMinutes(
+    meetingId: string, 
+    notes: string, 
+    decisions: string[], 
+    newTasks: {title: string, assignedTo: string, priority: PriorityLevel, dueDate?: string}[],
+    highlights?: string[],
+    warnings?: string[],
+    nextMeeting?: string
+  ): void {
     const meetings = this.getMeetings();
     const meet = meetings.find(m => m.id === meetingId);
     if (meet) {
       meet.notes = notes;
+      meet.highlights = highlights;
+      meet.warnings = warnings;
+      meet.next_meeting = nextMeeting;
       this.saveMeetings(meetings);
 
       // --- SYNCHRO ARRIERE-PLAN SUPABASE ---
       if (supabase) {
         supabase.from('meetings').update({
-          notes: meet.notes
+          notes: meet.notes,
+          highlights: meet.highlights,
+          warnings: meet.warnings,
+          next_meeting: meet.next_meeting
         }).eq('id', meet.id).then(({ error }) => {
           if (error) console.warn("Supabase background meeting notes update error:", error.message);
         });

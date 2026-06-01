@@ -142,6 +142,9 @@ export interface Meeting {
   participant_ids: string[];
   agenda: string[];
   notes?: string;
+  highlights?: string[];
+  warnings?: string[];
+  next_meeting?: string;
   is_minutes_validated: boolean;
   validated_by?: string;
   validated_at?: string;

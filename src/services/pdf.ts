@@ -186,6 +186,30 @@ export const exportMeetingToPDF = (
         .badge-normal { background-color: #F0EFFF; color: #5856D6; }
         .badge-low { background-color: #EAF9EE; color: #34C759; }
 
+        .highlights-card {
+          background-color: rgba(0, 122, 255, 0.05);
+          border-left: 4px solid #007AFF;
+          border-radius: 8px;
+          padding: 12px 16px;
+          margin-bottom: 20px;
+        }
+
+        .warnings-card {
+          background-color: rgba(255, 149, 0, 0.05);
+          border-left: 4px solid #FF9500;
+          border-radius: 8px;
+          padding: 12px 16px;
+          margin-bottom: 20px;
+        }
+
+        .next-meeting-card {
+          background-color: #F5F5F7;
+          border: 1px solid #E5E5EA;
+          border-radius: 8px;
+          padding: 12px 16px;
+          margin-top: 24px;
+        }
+
         .validation-stamp {
           margin-top: 50px;
           display: flex;
@@ -273,6 +297,32 @@ export const exportMeetingToPDF = (
         </ul>
       </div>
 
+      ${((meeting.highlights && meeting.highlights.length > 0 && meeting.highlights.some(h => h.trim())) ||
+         (meeting.warnings && meeting.warnings.length > 0 && meeting.warnings.some(w => w.trim()))) ? `
+      <div class="section" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+        ${meeting.highlights && meeting.highlights.some(h => h.trim()) ? `
+        <div class="highlights-card">
+          <h3 style="color: #007AFF; font-size: 11px; font-weight: 700; text-transform: uppercase; margin: 0 0 8px 0; letter-spacing: 0.5px; border-bottom: none; padding-bottom: 0;">
+            🌟 Points Importants / Faits Saillants
+          </h3>
+          <ul style="padding-left: 16px; margin: 0; font-size: 12.5px;">
+            ${meeting.highlights.filter(h => h.trim()).map(h => `<li>${h}</li>`).join('')}
+          </ul>
+        </div>
+        ` : ''}
+        ${meeting.warnings && meeting.warnings.some(w => w.trim()) ? `
+        <div class="warnings-card">
+          <h3 style="color: #FF9500; font-size: 11px; font-weight: 700; text-transform: uppercase; margin: 0 0 8px 0; letter-spacing: 0.5px; border-bottom: none; padding-bottom: 0;">
+            ⚠️ Points de Vigilance / Risques
+          </h3>
+          <ul style="padding-left: 16px; margin: 0; font-size: 12.5px;">
+            ${meeting.warnings.filter(w => w.trim()).map(w => `<li>${w}</li>`).join('')}
+          </ul>
+        </div>
+        ` : ''}
+      </div>
+      ` : ''}
+
       ${meeting.notes ? `
       <div class="section">
         <h2>Notes & Débats</h2>
@@ -315,6 +365,17 @@ export const exportMeetingToPDF = (
             }).join('')}
           </tbody>
         </table>
+      </div>
+      ` : ''}
+
+      ${meeting.next_meeting ? `
+      <div class="next-meeting-card">
+        <div style="font-size: 10px; font-weight: 700; color: #86868B; text-transform: uppercase; letter-spacing: 0.5px;">
+          📅 Prochaine Réunion Programmée
+        </div>
+        <div style="font-size: 13px; font-weight: 600; color: #1D1D1F; margin-top: 4px;">
+          ${meeting.next_meeting}
+        </div>
       </div>
       ` : ''}
 
