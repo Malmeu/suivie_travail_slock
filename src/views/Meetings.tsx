@@ -29,6 +29,9 @@ export const Meetings: React.FC<MeetingsProps> = ({
   const [pvAgenda, setPvAgenda] = useState('');
   const [pvNotes, setPvNotes] = useState('');
   const [pvParticipants, setPvParticipants] = useState<string[]>([]);
+  const [pvHighlights, setPvHighlights] = useState('');
+  const [pvWarnings, setPvWarnings] = useState('');
+  const [pvNextMeeting, setPvNextMeeting] = useState('');
 
   // Éditeur de PV locaux
   const [isEditing, setIsEditing] = useState(false);
@@ -252,6 +255,8 @@ export const Meetings: React.FC<MeetingsProps> = ({
     if (!pvTitle.trim() || !pvDate) return;
 
     const listAgenda = pvAgenda.split('\n').filter(a => a.trim().length > 0);
+    const listHighlights = pvHighlights.split('\n').filter(h => h.trim().length > 0);
+    const listWarnings = pvWarnings.split('\n').filter(w => w.trim().length > 0);
 
     const newMeeting: Meeting = {
       id: `meet_${Date.now()}`,
@@ -263,9 +268,9 @@ export const Meetings: React.FC<MeetingsProps> = ({
       participant_ids: [currentUser.id, ...pvParticipants],
       agenda: listAgenda.length > 0 ? listAgenda : ['Sujets abordés dans la séance'],
       notes: pvNotes || 'Procès-verbal rédigé en séance.',
-      highlights: [],
-      warnings: [],
-      next_meeting: '',
+      highlights: listHighlights,
+      warnings: listWarnings,
+      next_meeting: pvNextMeeting,
       is_minutes_validated: false,
       created_at: new Date().toISOString(),
       project_id: 'proj_dpi' // Lié par défaut
@@ -284,6 +289,9 @@ export const Meetings: React.FC<MeetingsProps> = ({
     setPvAgenda('');
     setPvNotes('');
     setPvParticipants([]);
+    setPvHighlights('');
+    setPvWarnings('');
+    setPvNextMeeting('');
     
     alert("PV direct créé avec succès ! Vous pouvez maintenant y ajouter des décisions structurées ou le signer numériquement.");
   };
@@ -938,11 +946,49 @@ export const Meetings: React.FC<MeetingsProps> = ({
                 <div className="form-group">
                   <label>Notes de séance / Synthèse du PV *</label>
                   <textarea 
-                    rows={4} 
+                    rows={3} 
                     placeholder="Saisissez ici le contenu principal de votre procès-verbal, résumant les échanges et points clés..." 
                     value={pvNotes}
                     onChange={(e) => setPvNotes(e.target.value)}
                     required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label style={{ color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
+                    🌟 Points Importants / Faits Saillants (Un par ligne)
+                  </label>
+                  <textarea 
+                    rows={2} 
+                    placeholder="ex: Accord général sur l'architecture DPI&#10; validation du budget de la phase 1" 
+                    value={pvHighlights}
+                    onChange={(e) => setPvHighlights(e.target.value)}
+                    style={{ backgroundColor: '#F5FAFF' }}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label style={{ color: 'var(--color-warning)', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
+                    ⚠️ Points de Vigilance / Risques (Un par ligne)
+                  </label>
+                  <textarea 
+                    rows={2} 
+                    placeholder="ex: Risque de retard sur la livraison du matériel réseau&#10;Congés estivaux de la logistique" 
+                    value={pvWarnings}
+                    onChange={(e) => setPvWarnings(e.target.value)}
+                    style={{ backgroundColor: '#FFFDF5' }}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
+                    📅 Prochaine réunion programmée
+                  </label>
+                  <input 
+                    type="text" 
+                    placeholder="ex: Lundi 15 Juin à 14h - Suivi de chantier DPI" 
+                    value={pvNextMeeting}
+                    onChange={(e) => setPvNextMeeting(e.target.value)}
                   />
                 </div>
               </div>
