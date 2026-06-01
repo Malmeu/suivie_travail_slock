@@ -28,9 +28,13 @@ ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 -- 1. PROFILES & DEPARTMENTS
 -- ==========================================
 
--- Tout utilisateur authentifié peut consulter l'annuaire des profils
+-- Tout le monde (y compris les invites en demo) peut consulter l'annuaire des profils
 CREATE POLICY "Annuaire accessible a tous" ON profiles
-    FOR SELECT USING (auth.role() = 'authenticated');
+    FOR SELECT USING (true);
+
+-- Permettre la creation de profil lors de l'inscription
+CREATE POLICY "Creation de profil autorisee" ON profiles
+    FOR INSERT WITH CHECK (true);
 
 -- Un utilisateur ne peut modifier que son propre profil (ex: disponibilité de garde)
 CREATE POLICY "Modification propre profil uniquement" ON profiles
