@@ -3,6 +3,7 @@ import { Users, Info, Plus, ChevronRight, MessageSquare, Clipboard, Folder, X } 
 import type { Group, Profile, Channel } from '../types';
 import { MockDatabase } from '../services/db';
 import { Avatar } from '../components/Avatar';
+import { supabase, toLocalDeptId } from '../services/supabase';
 
 interface GroupsProps {
   currentUser: Profile;
@@ -23,15 +24,96 @@ export const Groups: React.FC<GroupsProps> = ({
   const [gType, setGType] = useState<'service' | 'project' | 'committee' | 'temporary'>('committee');
   const [gMembers, setGMembers] = useState<string[]>([]);
 
-  useEffect(() => {
-    const loadGroupsData = () => {
+  const loadGroupsData = async () => {
+    if (supabase) {
+      try {
+        const client = supabase;
+
+        // 1. Charger les profils
+        const { data: profData, error: profErr } = await client.from('profiles').select('*');
+        if (!profErr && profData) {
+          const loadedProfiles: Profile[] = profData.map(p => ({
+            id: p.id,
+            first_name: p.first_name,
+            last_name: p.last_name,
+            email: p.email,
+            role: p.role,
+            avatar_url: p.avatar_url || `https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=100`,
+            phone: p.phone || "+33 6 00 00 00 00",
+            status: (p.status === 'active' ? 'available' : p.status) || 'available',
+            status_message: p.status_message || 'Disponible',
+            department_id: toLocalDeptId(p.department_id) || 'dep_cardio',
+            created_at: p.created_at || new Date().toISOString()
+          }));
+          setProfiles(loadedProfiles);
+        }
+
+        // 2. Charger les groupes
+        const { data: grpData, error: grpErr } = await client.from('groups').select('*');
+        if (!grpErr && grpData) {
+          const loadedGroups = await Promise.all(grpData.map(async (g) => {
+            const { data: members, error: memErr } = await client
+              .from('group_members')
+              .select('profile_id')
+              .eq('group_id', g.id);
+            
+            const memberIds = !memErr && members ? members.map(m => m.profile_id) : [];
+            
+            return {
+              id: g.id,
+              name: g.name,
+              description: g.description || '',
+              type: g.type,
+              owner_id: g.owner_id,
+              created_at: g.created_at || new Date().toISOString(),
+              member_ids: memberIds
+            };
+          }));
+          setGroups(loadedGroups);
+          if (loadedGroups.length > 0 && !selectedGroupId) {
+            setSelectedGroupId(loadedGroups[0].id);
+          }
+        }
+
+        // 3. Charger les canaux
+        const { data: chanData, error: chanErr } = await client.from('channels').select('*');
+        if (!chanErr && chanData) {
+          const loadedChannels = await Promise.all(chanData.map(async (c) => {
+            const { data: members, error: memErr } = await client
+              .from('channel_members')
+              .select('profile_id')
+              .eq('channel_id', c.id);
+            
+            const memberIds = !memErr && members ? members.map(m => m.profile_id) : [];
+            
+            return {
+              id: c.id,
+              group_id: c.group_id || undefined,
+              name: c.name,
+              description: c.description || '',
+              is_private: c.is_private || false,
+              owner_id: c.owner_id,
+              created_at: c.created_at || new Date().toISOString(),
+              member_ids: memberIds
+            };
+          }));
+          setChannels(loadedChannels);
+        }
+      } catch (err) {
+        console.error("Erreur de chargement asynchrone Supabase :", err);
+      }
+    } else {
+      // Fallback local hors ligne
       setGroups(MockDatabase.getGroups());
       setProfiles(MockDatabase.getProfiles());
       setChannels(MockDatabase.getChannels());
-    };
+    }
+  };
 
+  useEffect(() => {
     loadGroupsData();
 
+    // S'abonner aux notifications locales pour le mode fallback
     const handleGroupsUpdate = () => setGroups(MockDatabase.getGroups());
     const handleProfilesUpdate = () => setProfiles(MockDatabase.getProfiles());
     const handleChannelsUpdate = () => setChannels(MockDatabase.getChannels());
@@ -76,39 +158,95 @@ export const Groups: React.FC<GroupsProps> = ({
     }
   };
 
-  const handleCreateGroupSubmit = (e: React.FormEvent) => {
+  const handleCreateGroupSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!gName.trim()) return;
 
+    const newGroupId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `group_${Date.now()}`;
+    const memberIds = [currentUser.id, ...gMembers];
+
     const newGroup: Group = {
-      id: `group_${Date.now()}`,
+      id: newGroupId,
       name: gName,
       description: gDesc,
       type: gType,
       owner_id: currentUser.id,
       created_at: new Date().toISOString(),
-      member_ids: [currentUser.id, ...gMembers]
+      member_ids: memberIds
     };
 
-    const updated = [...groups, newGroup];
-    MockDatabase.saveGroups(updated);
-    setGroups(updated);
-    setSelectedGroupId(newGroup.id);
-    setShowCreateModal(false);
+    if (supabase) {
+      try {
+        const client = supabase;
 
-    // Créer aussi un canal associé
-    const channels = MockDatabase.getChannels();
-    const newChannel: Channel = {
-      id: `chan_${Date.now()}`,
-      group_id: newGroup.id,
-      name: gName.toLowerCase().replace(/\s+/g, '-'),
-      description: `Canal de discussion officiel pour : ${gName}`,
-      is_private: false,
-      owner_id: currentUser.id,
-      created_at: new Date().toISOString(),
-      member_ids: newGroup.member_ids
-    };
-    MockDatabase.saveChannels([...channels, newChannel]);
+        // 1. Créer le groupe dans Supabase
+        const { error: grpErr } = await client.from('groups').insert([{
+          id: newGroup.id,
+          name: newGroup.name,
+          description: newGroup.description,
+          type: newGroup.type,
+          owner_id: newGroup.owner_id,
+          created_at: newGroup.created_at
+        }]);
+        if (grpErr) throw grpErr;
+
+        // 2. Associer les membres au groupe
+        const membersData = memberIds.map(pId => ({
+          group_id: newGroup.id,
+          profile_id: pId
+        }));
+        const { error: memErr } = await client.from('group_members').insert(membersData);
+        if (memErr) throw memErr;
+
+        // 3. Créer un canal de discussion officiel associé
+        const newChanId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `chan_${Date.now()}`;
+        const { error: chanErr } = await client.from('channels').insert([{
+          id: newChanId,
+          group_id: newGroup.id,
+          name: gName.toLowerCase().replace(/\s+/g, '-'),
+          description: `Canal de discussion officiel pour : ${gName}`,
+          is_private: false,
+          owner_id: currentUser.id,
+          created_at: new Date().toISOString()
+        }]);
+        if (chanErr) throw chanErr;
+
+        // 4. Associer les membres au canal
+        const chanMembersData = memberIds.map(pId => ({
+          channel_id: newChanId,
+          profile_id: pId
+        }));
+        const { error: chanMemErr } = await client.from('channel_members').insert(chanMembersData);
+        if (chanMemErr) throw chanMemErr;
+
+        // Recharger les données directement depuis le cloud pour rafraîchir la liste et fermer
+        await loadGroupsData();
+        setSelectedGroupId(newGroup.id);
+        setShowCreateModal(false);
+      } catch (err: any) {
+        alert(`Erreur lors du déploiement du groupe sur Supabase : ${err.message}`);
+      }
+    } else {
+      // Fallback local hors ligne
+      const updated = [...groups, newGroup];
+      MockDatabase.saveGroups(updated);
+      setGroups(updated);
+      setSelectedGroupId(newGroup.id);
+      setShowCreateModal(false);
+
+      const channelsData = MockDatabase.getChannels();
+      const newChannel: Channel = {
+        id: `chan_${Date.now()}`,
+        group_id: newGroup.id,
+        name: gName.toLowerCase().replace(/\s+/g, '-'),
+        description: `Canal de discussion officiel pour : ${gName}`,
+        is_private: false,
+        owner_id: currentUser.id,
+        created_at: new Date().toISOString(),
+        member_ids: memberIds
+      };
+      MockDatabase.saveChannels([...channelsData, newChannel]);
+    }
 
     // Reset Form
     setGName('');
